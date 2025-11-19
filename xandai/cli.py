@@ -78,11 +78,8 @@ class XandAICLI:
             "/task": self._process_task_mode,
             # Review mode
             "/review": self._process_review_mode,
-            # Provider management
+            # Provider management (Ollama only)
             "/provider": self._show_provider_status,
-            "/providers": self._list_providers,
-            "/switch": self._switch_provider,
-            "/detect": self._auto_detect_provider,
             "/server": self._set_server_endpoint,
             "/list-models": self._list_and_select_models,
             "/models": self._list_and_select_models,
@@ -426,12 +423,9 @@ class XandAICLI:
 [cyan]Code Review:[/cyan]
   /review [path] - Analyze Git changes and provide code review
 
-[cyan]LLM Provider Management:[/cyan]
-  /provider      - Show provider connection status
-  /providers     - List all available providers
-  /switch <name> - Switch to another provider
-  /detect        - Auto-detect available provider
-  /server <url>  - Set server URL
+[cyan]Ollama Provider Management:[/cyan]
+  /provider      - Show Ollama connection status
+  /server <url>  - Set Ollama server URL
   /list-models   - List available models and select one
   /models        - Alias for /list-models
 
@@ -443,9 +437,9 @@ class XandAICLI:
         self.console.print(Panel(help_text, title="Help", border_style="blue"))
 
     def _show_provider_status(self, args: str):
-        """Shows detailed provider connection status"""
+        """Shows detailed Ollama connection status"""
         status = self.llm_provider.health_check()
-        provider_name = self.llm_provider.get_provider_type().value.title()
+        provider_name = "Ollama"
 
         if status["connected"]:
             self.console.print(f"[green]✓ {provider_name} is connected[/green]")
@@ -466,114 +460,8 @@ class XandAICLI:
             self.console.print(f"Endpoint: {status.get('endpoint', 'unknown')}")
 
             self.console.print("\n[cyan]Commands:[/cyan]")
-            self.console.print("  [bold]/switch <provider>[/bold] - Switch to another provider")
-            self.console.print("  [bold]/detect[/bold] - Auto-detect available provider")
-            self.console.print("  [bold]/server <url>[/bold] - Set server endpoint")
+            self.console.print("  [bold]/server <url>[/bold] - Set Ollama server endpoint")
             self.console.print("  [bold]/list-models[/bold] - List and select models")
-
-    def _list_providers(self, args: str):
-        """List all available providers"""
-        providers = LLMProviderFactory.get_supported_providers()
-        current_provider = self.llm_provider.get_provider_type().value
-
-        self.console.print("\n[cyan]Available Providers:[/cyan]")
-        for provider in providers:
-            indicator = "[green]✓[/green]" if provider == current_provider else " "
-            self.console.print(f"{indicator} {provider.title()}")
-
-        self.console.print(f"\nCurrent provider: [bold]{current_provider.title()}[/bold]")
-        self.console.print("Use [bold]/switch <provider>[/bold] to change providers")
-
-    def _switch_provider(self, args: str):
-        """Switch to a different provider"""
-        if not args.strip():
-            self.console.print("[yellow]Usage: /switch <provider>[/yellow]")
-            self.console.print("Available: ollama, lm_studio")
-            return
-
-        new_provider = args.strip().lower()
-        current_provider = self.llm_provider.get_provider_type().value
-
-        if new_provider == current_provider:
-            self.console.print(f"[yellow]Already using {new_provider.title()}[/yellow]")
-            return
-
-        try:
-            # Create new provider
-            new_llm_provider = LLMProviderFactory.create_provider(new_provider)
-
-            # Test connection
-            if new_llm_provider.is_connected():
-                self.llm_provider = new_llm_provider
-
-                # Update processors
-                self.chat_processor = ChatProcessor(self.llm_provider, self.conversation_manager)
-                self.task_processor = TaskProcessor(self.llm_provider, self.conversation_manager)
-                self.review_processor = ReviewProcessor(
-                    self.llm_provider, self.conversation_manager
-                )
-                self.agent_processor = AgentProcessor(
-                    self.llm_provider, self.conversation_manager, self.tool_manager
-                )
-                self.tool_manager.llm_provider = new_llm_provider
-
-                self.console.print(f"[green]✓ Switched to {new_provider.title()}[/green]")
-
-                # Show available models and prompt selection if multiple
-                models = self.llm_provider.list_models()
-                if models:
-                    if len(models) > 1:
-                        self.console.print(f"Found {len(models)} models. Please select one:")
-                        self._show_model_selection(models)
-                    else:
-                        self.llm_provider.set_model(models[0])
-                        self.console.print(f"Using only available model: {models[0]}")
-                else:
-                    self.console.print("No models found")
-            else:
-                self.console.print(f"[red]✗ Could not connect to {new_provider.title()}[/red]")
-                self.console.print("Please ensure the provider is running and accessible")
-
-        except Exception as e:
-            self.console.print(f"[red]Error switching to {new_provider}: {e}[/red]")
-
-    def _auto_detect_provider(self, args: str):
-        """Auto-detect the best available provider"""
-        self.console.print("[dim]🔍 Auto-detecting providers...[/dim]")
-
-        try:
-            new_llm_provider = LLMProviderFactory.create_auto_detect()
-            detected_provider = new_llm_provider.get_provider_type().value
-
-            self.llm_provider = new_llm_provider
-
-            # Update processors
-            self.chat_processor = ChatProcessor(self.llm_provider, self.conversation_manager)
-            self.task_processor = TaskProcessor(self.llm_provider, self.conversation_manager)
-            self.review_processor = ReviewProcessor(self.llm_provider, self.conversation_manager)
-            self.agent_processor = AgentProcessor(
-                self.llm_provider, self.conversation_manager, self.tool_manager
-            )
-            self.tool_manager.llm_provider = new_llm_provider
-
-            self.console.print(
-                f"[green]✓ Auto-detected and switched to {detected_provider.title()}[/green]"
-            )
-
-            # Show status and handle model selection
-            status = self.llm_provider.health_check()
-            if status.get("available_models"):
-                models = status["available_models"]
-                model_count = len(models)
-                if model_count > 1:
-                    self.console.print(f"Found {model_count} models. Please select one:")
-                    self._show_model_selection(models)
-                else:
-                    self.llm_provider.set_model(models[0])
-                    self.console.print(f"Using only available model: {models[0]}")
-
-        except Exception as e:
-            self.console.print(f"[red]Auto-detection failed: {e}[/red]")
 
     def _set_server_endpoint(self, args: str):
         """Sets Ollama server URL"""

@@ -6,7 +6,7 @@
   [![PyPI version](https://img.shields.io/pypi/v/xandai-cli.svg)](https://pypi.org/project/xandai-cli/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-  Terminal assistant that combines AI chat with command execution. Supports Ollama and LM Studio.
+  **Fully Offline** Terminal assistant that combines AI chat with command execution. Uses Ollama for local AI models.
 </div>
 <img src="images/logo.png" alt="XandAI CLI Logo"/>
 
@@ -14,7 +14,7 @@
 
 ```bash
 pip install xandai-cli
-xandai --auto-detect
+xandai
 ```
 
 ## Usage
@@ -31,14 +31,17 @@ xandai> How do I optimize this code?
 xandai> create a REST API with authentication
 ```
 
-## Providers
+## Offline AI with Ollama
 
-- **Ollama** - Local models
-- **LM Studio** - GUI-based model management
+XandAI CLI works **100% offline** using Ollama for local AI models.
+
+1. Install Ollama: https://ollama.ai
+2. Pull a model: `ollama pull llama2`
+3. Run XandAI: `xandai`
 
 ```bash
-xandai --provider ollama
-xandai --provider lm_studio --endpoint http://localhost:1234
+# Set custom Ollama server (default: http://localhost:11434)
+xandai --endpoint http://localhost:11434
 ```
 
 ## Commands
@@ -47,7 +50,6 @@ xandai --provider lm_studio --endpoint http://localhost:1234
 /agent <instruction>  # Multi-step LLM orchestrator for complex tasks
 /set-agent-limit <n>  # Set max LLM calls (default: 20, max: 100)
 /review               # AI-powered code review
-/web on               # Enable web content integration
 /help                 # Show all commands
 /clear                # Clear history
 /status               # System status
@@ -164,16 +166,6 @@ xandai> /review
 ```
 
 ![Code Review Example](images/Review.png)
-
-## Web Integration
-
-Automatically fetches and analyzes web content when you paste links:
-
-```bash
-xandai> /web on
-xandai> How does this work? https://docs.python.org/tutorial
-# Content is automatically fetched and analyzed
-```
 
 ## Development
 

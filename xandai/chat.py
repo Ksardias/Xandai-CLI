@@ -30,7 +30,6 @@ from xandai.utils.enhanced_file_handler import EnhancedFileHandler
 from xandai.utils.os_utils import OSUtils
 from xandai.utils.prompt_manager import PromptManager
 from xandai.utils.tool_manager import ToolManager
-from xandai.web.web_manager import WebManager
 
 
 class IntelligentCompleter(Completer):
@@ -597,12 +596,7 @@ class ChatREPL:
             verbose=verbose,
         )
 
-        # Web integration manager
-        self.web_manager = WebManager(
-            enabled=self.app_state.get_preference("web_integration_enabled", False),
-            timeout=self.app_state.get_preference("web_request_timeout", 10),
-            max_links=self.app_state.get_preference("max_links_per_request", 3),
-        )
+
 
         # Prompt session with history and completion
         self.session = PromptSession(
@@ -929,15 +923,6 @@ class ChatREPL:
         # Exit commands
         if command in ["/exit", "/quit", "/bye"]:
             raise KeyboardInterrupt()  # Will be caught by main loop
-
-        # Web integration toggle
-        if command == "/web":
-            self._handle_web_command()
-            return True
-
-        if command.startswith("/web "):
-            self._handle_web_command(user_input[5:].strip())
-            return True
 
         # Task mode (DEPRECATED)
         if command.startswith("/task "):
@@ -1422,23 +1407,8 @@ class ChatREPL:
                         True,
                     )
 
-            # Process web integration if enabled
-            web_result = self.web_manager.process_user_input(user_input)
-
-            if web_result.success and web_result.extracted_contents:
-                if self.verbose:
-                    OSUtils.debug_print(
-                        f"Web integration: processed {web_result.processing_info.get('successful_extractions', 0)} links",
-                        True,
-                    )
-
-                # Show user what web content was found
-                self._display_web_integration_info(web_result)
-
-                # Use enhanced input with web context
-                processed_input = web_result.processed_text
-            else:
-                processed_input = user_input
+            # Use the user input directly (no web integration)
+            processed_input = user_input
 
             # Add user message to history (original input for history tracking)
             self.history_manager.add_conversation(
@@ -4976,14 +4946,6 @@ Remember: Your response will be written directly to the file! NO explanatory tex
   • /server <url>     - Set custom server endpoint
   • /models           - List available models
 
-[yellow]Web Integration:[/yellow]
-  • /web              - Show web integration status
-  • /web on           - Enable web integration (fetch content from links)
-  • /web off          - Disable web integration
-  • /web status       - Show detailed status and configuration
-  • /web stats        - Show statistics and cache information
-  • /web clear        - Clear web content cache
-
 [yellow]Custom Tools:[/yellow]
   • /tools            - List available custom tools
   • Tools are auto-detected from the /tools directory
@@ -5658,146 +5620,3 @@ CAPABILITIES:
 
 Remember: Users can run terminal commands directly, and you'll see the results. Use this to provide contextual, actionable advice."""
 
-    def _display_web_integration_info(self, web_result):
-        """Display information about web content that was processed"""
-        if not web_result.extracted_contents:
-            return
-
-        info_parts = []
-
-        for i, content in enumerate(web_result.extracted_contents, 1):
-            title = content.title or "Untitled"
-            word_count = content.word_count
-
-            info_parts.append(f"📄 Page {i}: {title}")
-            if word_count > 0:
-                info_parts.append(f"   📊 {word_count} words processed")
-
-            if content.language:
-                info_parts.append(f"   💻 Technology: {content.language}")
-
-            if content.code_blocks:
-                info_parts.append(f"   🔧 {len(content.code_blocks)} code examples found")
-
-        # Show summary
-        processing_info = web_result.processing_info
-        total_links = processing_info.get("links_found", 0)
-        processed_links = processing_info.get("successful_extractions", 0)
-
-        summary = f"🌐 Web Integration: Processed {processed_links}/{total_links} links"
-
-        info_text = summary + "\n" + "\n".join(info_parts)
-
-        self.console.print(
-            Panel(info_text, title="Web Content Integrated", border_style="blue", padding=(0, 1))
-        )
-
-    def _handle_web_command(self, parameter: str = None):
-        """Handle web integration commands"""
-        if parameter is None:
-            # Show current status
-            self._show_web_status()
-            return
-
-        param = parameter.lower().strip()
-
-        if param in ["on", "enable", "true", "1"]:
-            self.web_manager.set_enabled(True)
-            self.app_state.set_preference("web_integration_enabled", True)
-            self.console.print("🌐 [green]Web integration enabled[/green]")
-            self.console.print(
-                "Links in your messages will now be automatically fetched and processed."
-            )
-
-        elif param in ["off", "disable", "false", "0"]:
-            self.web_manager.set_enabled(False)
-            self.app_state.set_preference("web_integration_enabled", False)
-            self.console.print("🌐 [yellow]Web integration disabled[/yellow]")
-
-        elif param == "status":
-            self._show_web_status()
-
-        elif param == "clear":
-            self.web_manager.clear_cache()
-            self.console.print("🗑️ Web content cache cleared")
-
-        elif param == "stats":
-            self._show_web_stats()
-
-        else:
-            self.console.print(
-                """[yellow]Web Integration Commands:[/yellow]
-
-/web                 - Show current status
-/web on              - Enable web integration
-/web off             - Disable web integration
-/web status          - Show detailed status
-/web stats           - Show statistics
-/web clear           - Clear web content cache
-
-When enabled, links in your messages will be automatically fetched
-and their content added to the AI's context for better assistance.
-
-Note: Only processes links that appear in regular text, not in
-commands or code examples."""
-            )
-
-    def _show_web_status(self):
-        """Show current web integration status"""
-        enabled = self.web_manager.is_enabled()
-        stats = self.web_manager.get_stats()
-        cache_info = self.web_manager.get_cache_info()
-
-        status_text = f"""🌐 Web Integration Status: {'🟢 ENABLED' if enabled else '🔴 DISABLED'}
-
-Configuration:
-• Request timeout: {stats['timeout']} seconds
-• Max links per request: {stats['max_links']}
-• Cache size: {cache_info['size']}/{cache_info['max_size']}
-
-Components:
-• Link detector: {stats['components']['link_detector']}
-• Web fetcher: {stats['components']['web_fetcher']}
-• Content extractor: {stats['components']['content_extractor']}
-
-Usage: Type '/web on' to enable or '/web help' for more options."""
-
-        self.console.print(
-            Panel(status_text, title="Web Integration", border_style="blue" if enabled else "dim")
-        )
-
-    def _show_web_stats(self):
-        """Show web integration statistics"""
-        cache_info = self.web_manager.get_cache_info()
-        stats = self.web_manager.get_stats()
-
-        stats_text = f"""📊 Web Integration Statistics
-
-Cache Information:
-• Cached URLs: {cache_info['size']}
-• Cache capacity: {cache_info['max_size']}
-• Memory efficiency: {cache_info['size']}/{cache_info['max_size']} ({(cache_info['size']/cache_info['max_size']*100):.1f}%)
-
-Configuration:
-• Timeout: {stats['timeout']}s
-• Max links: {stats['max_links']}
-• Status: {'Enabled' if stats['enabled'] else 'Disabled'}"""
-
-        if cache_info["urls"]:
-            stats_text += "\n\nRecently cached domains:"
-            domains = set()
-            for url in cache_info["urls"][-10:]:  # Show last 10
-                try:
-                    from urllib.parse import urlparse
-
-                    domain = urlparse(url).netloc
-                    domains.add(domain)
-                except:
-                    continue
-
-            for domain in sorted(domains):
-                stats_text += f"\n• {domain}"
-
-        self.console.print(
-            Panel(stats_text, title="Web Integration Statistics", border_style="cyan")
-        )

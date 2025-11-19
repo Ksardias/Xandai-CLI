@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 XandAI - Main CLI Entry Point
-Production-ready CLI assistant with multi-provider support
+Production-ready CLI assistant with Ollama for offline operation
 Enhanced with OS-aware utilities and intelligent prompts
 """
 
@@ -38,13 +38,13 @@ def create_parser() -> argparse.ArgumentParser:
     """Create and configure argument parser with OS-aware debug options"""
     parser = argparse.ArgumentParser(
         prog="xandai",
-        description="XandAI - Multi-Provider AI Terminal Assistant with Interactive Code Execution",
+        description="XandAI - Offline AI Terminal Assistant with Ollama",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
-🚀 Multi-Provider Support:
-  • Ollama (local LLM server)
-  • LM Studio (OpenAI-compatible API)
-  • Auto-detection of available providers
+🚀 Fully Offline Operation:
+  • Uses Ollama for local LLM execution
+  • No internet connection required
+  • Complete data privacy
 
 📋 Interactive Features:
   • Smart code detection and execution prompts
@@ -53,18 +53,14 @@ def create_parser() -> argparse.ArgumentParser:
   • Real-time conversation with context tracking
 
 Examples:
-  xandai                                    # Start with auto-detected provider
-  xandai --provider ollama                  # Use Ollama specifically
-  xandai --provider lm_studio               # Use LM Studio
-  xandai --auto-detect                      # Auto-detect best provider
+  xandai                                    # Start with Ollama (default)
   xandai --endpoint http://192.168.1.10:11434  # Custom Ollama server
   xandai --debug --platform-info           # Debug mode with platform info
 
 🎯 Interactive Commands (available in REPL):
   /help               - Show available commands
   /interactive        - Toggle code execution prompts
-  /status             - Show provider and model status
-  /task <description> - [DEPRECIADO] Structured project planning mode
+  /status             - Show Ollama connection status
   /debug              - Toggle debug information
   /exit               - Exit XandAI
 
@@ -77,8 +73,7 @@ Platform: {OSUtils.get_platform().upper()} ({platform.system()} {platform.releas
         "--provider",
         metavar="PROVIDER",
         default="ollama",
-        choices=["ollama", "lm_studio"],
-        help="LLM provider to use (default: ollama) - 'ollama' for local Ollama server, 'lm_studio' for LM Studio OpenAI-compatible API",
+        help="LLM provider (only 'ollama' is supported for offline operation)",
     )
 
     parser.add_argument(
@@ -117,7 +112,7 @@ Platform: {OSUtils.get_platform().upper()} ({platform.system()} {platform.releas
     parser.add_argument(
         "--auto-detect",
         action="store_true",
-        help="Auto-detect best available provider (scans for Ollama and LM Studio servers)",
+        help="Auto-detect Ollama server (for backward compatibility, always uses Ollama)",
     )
 
     parser.add_argument(
@@ -133,7 +128,7 @@ Platform: {OSUtils.get_platform().upper()} ({platform.system()} {platform.releas
     )
 
     parser.add_argument(
-        "--version", action="version", version="XandAI 2.1.5 - Multi-Provider Edition"
+        "--version", action="version", version="XandAI 2.2.0 - Offline Edition"
     )
 
     return parser
@@ -271,16 +266,16 @@ def main():
             )
 
         # Initialize LLM Provider
-        print("🔌 Initializing LLM provider...")
+        print("🔌 Initializing Ollama...")
 
         if args.auto_detect:
             if args.debug:
-                OSUtils.debug_print("Auto-detecting best available provider", True)
-            print("🔍 Auto-detecting best available provider...")
+                OSUtils.debug_print("Auto-detecting Ollama server", True)
+            print("🔍 Detecting Ollama server...")
             llm_provider = LLMProviderFactory.create_auto_detect()
         else:
             if args.debug:
-                OSUtils.debug_print(f"Creating {args.provider} provider", True)
+                OSUtils.debug_print(f"Creating Ollama provider", True)
 
             config_options = {}
             if args.endpoint:
@@ -289,54 +284,44 @@ def main():
                 config_options["model"] = args.model
 
             llm_provider = LLMProviderFactory.create_provider(
-                provider_type=args.provider, **config_options
+                provider_type="ollama", **config_options
             )
 
         # Check connection
         if not llm_provider.is_connected():
-            provider_name = llm_provider.get_provider_type().value.title()
             endpoint = llm_provider.get_base_url()
 
-            print(f"❌ Could not connect to {provider_name} at {endpoint}")
-            print(f"Please ensure {provider_name} is running and accessible.")
+            print(f"❌ Could not connect to Ollama at {endpoint}")
+            print(f"Please ensure Ollama is running and accessible.")
 
-            # Provider-specific help
-            if llm_provider.get_provider_type().value == "ollama":
-                if OSUtils.is_windows():
-                    print("Windows: Try running 'ollama serve' in a separate PowerShell window")
-                else:
-                    print("Unix-like: Try running 'ollama serve' in a separate terminal")
-            elif llm_provider.get_provider_type().value == "lm_studio":
-                print("Make sure LM Studio is running with a model loaded")
-                print("Check the 'Server' tab in LM Studio and ensure it's started")
+            # Ollama-specific help
+            if OSUtils.is_windows():
+                print("Windows: Try running 'ollama serve' in a separate PowerShell window")
+            else:
+                print("Unix-like: Try running 'ollama serve' in a separate terminal")
 
             if args.debug:
                 OSUtils.debug_print(
-                    f"Connection failed - check if {provider_name} service is running",
+                    f"Connection failed - check if Ollama service is running",
                     True,
                 )
                 OSUtils.debug_print(f"Endpoint attempted: {endpoint}", True)
 
             sys.exit(1)
 
-        provider_name = llm_provider.get_provider_type().value.title()
         if args.debug:
-            OSUtils.debug_print(f"{provider_name} connection successful", True)
-        print(f"✅ Connected to {provider_name} successfully!")
+            OSUtils.debug_print(f"Ollama connection successful", True)
+        print(f"✅ Connected to Ollama successfully!")
 
         # Get available models
         models = llm_provider.list_models()
         if not models:
-            provider_name = llm_provider.get_provider_type().value.title()
-            print(f"❌ No models found on {provider_name} server.")
+            print(f"❌ No models found on Ollama server.")
 
-            if llm_provider.get_provider_type().value == "ollama":
-                if OSUtils.is_windows():
-                    print("Try: ollama pull llama3.2 (in PowerShell)")
-                else:
-                    print("Try: ollama pull llama3.2 (in terminal)")
-            elif llm_provider.get_provider_type().value == "lm_studio":
-                print("Load a model in LM Studio first")
+            if OSUtils.is_windows():
+                print("Try: ollama pull llama3.2 (in PowerShell)")
+            else:
+                print("Try: ollama pull llama3.2 (in terminal)")
 
             sys.exit(1)
 
@@ -420,7 +405,6 @@ def main():
             OSUtils.debug_print("History manager initialized", True)
 
         # Show ASCII title and startup info
-        provider_name = llm_provider.get_provider_type().value.title()
         current_model = llm_provider.get_current_model() or "None"
 
         # Beautiful ASCII art logo with sunset gradient (red → orange → yellow)
@@ -441,12 +425,12 @@ def main():
         print()
 
         # Provider and Model info with better formatting
-        box_width = max(len(f"Provider: {provider_name}"), len(f"Model: {current_model}")) + 6
+        box_width = max(len(f"Provider: Ollama"), len(f"Model: {current_model}")) + 6
         border_line = "═" * box_width
 
         print("\033[1;35m╔" + border_line + "╗\033[0m")
-        provider_line = f"Provider: \033[1;32m{provider_name}\033[1;35m"
-        provider_padding = box_width - len(f"Provider: {provider_name}")
+        provider_line = f"Provider: \033[1;32mOllama\033[1;35m"
+        provider_padding = box_width - len(f"Provider: Ollama")
         print("\033[1;35m║ " + provider_line + " " * provider_padding + " ║\033[0m")
 
         model_line = f"Model:    \033[1;33m{current_model}\033[1;35m"
@@ -455,7 +439,7 @@ def main():
         print("\033[1;35m╚" + border_line + "╝\033[0m")
         print()
 
-        print("\033[1;32m🚀 Starting XandAI REPL...\033[0m")
+        print("\033[1;32m🚀 Starting XandAI REPL (Offline Mode)...\033[0m")
         print("Type '\033[1;36mhelp\033[0m' for commands or start chatting!")
         print(
             "\033[1;33m⚠️  Note: /task command is deprecated. Use natural conversation instead.\033[0m"

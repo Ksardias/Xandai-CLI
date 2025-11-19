@@ -1,11 +1,10 @@
 ﻿"""
-XandAI Integrations - External service integrations (Ollama, LM Studio, etc.)
+XandAI Integrations - Ollama integration for offline AI
 
-Provides unified interface for different LLM providers through standardized abstractions.
+Provides unified interface for Ollama LLM provider through standardized abstractions.
 """
 
 from .base_provider import LLMConfig, LLMProvider, LLMResponse, ProviderType
-from .lm_studio_provider import LMStudioProvider
 
 # Legacy compatibility - maintain existing imports
 from .ollama_client import OllamaClient, OllamaResponse
@@ -19,7 +18,6 @@ __all__ = [
     "LLMConfig",
     "ProviderType",
     "OllamaProvider",
-    "LMStudioProvider",
     "LLMProviderFactory",
     # Legacy compatibility
     "OllamaClient",

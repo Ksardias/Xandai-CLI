@@ -1061,23 +1061,6 @@ class ChatREPL:
             self._show_provider_status()
             return True
 
-        if command in ["/providers"]:
-            self._list_available_providers()
-            return True
-
-        if command.startswith("/switch "):
-            provider_name = user_input[8:].strip()
-            if provider_name:
-                self._switch_provider(provider_name)
-            else:
-                self.console.print("[yellow]Usage: /switch <provider>[/yellow]")
-                self.console.print("[dim]Available: ollama, lm_studio[/dim]")
-            return True
-
-        if command in ["/detect"]:
-            self._auto_detect_provider()
-            return True
-
         if command.startswith("/server "):
             server_url = user_input[8:].strip()
             if server_url:
@@ -2553,7 +2536,7 @@ Continue the code now:""",
 
         except ConnectionError as e:
             self.console.print(f"[red]Connection error: {e}[/red]")
-            self.console.print("Make sure your LLM provider (Ollama/LM Studio) is running")
+            self.console.print("Make sure Ollama is running")
         except Exception as e:
             self.console.print(f"[red]Agent error: {e}[/red]")
 
@@ -4938,11 +4921,8 @@ Remember: Your response will be written directly to the file! NO explanatory tex
   • /review [path]  - Analyze Git changes and provide code review
   • /exit, /quit, /bye - Exit XandAI
 
-[yellow]Provider Management:[/yellow]
-  • /provider         - Show current provider status
-  • /providers        - List all available providers
-  • /switch <provider> - Switch to another provider (ollama, lm_studio)
-  • /detect           - Auto-detect best available provider
+[yellow]Ollama Management:[/yellow]
+  • /provider         - Show Ollama connection status
   • /server <url>     - Set custom server endpoint
   • /models           - List available models
 
@@ -5145,155 +5125,11 @@ Remember: Your response will be written directly to the file! NO explanatory tex
         except Exception as e:
             self.console.print(f"[red]Error getting provider status: {e}[/red]")
 
-    def _list_available_providers(self):
-        """List all available providers and their status"""
-        self.console.print("[bold cyan]Available Providers:[/bold cyan]\n")
-
-        providers = ["ollama", "lm_studio"]
-        current_provider = self.llm_provider.get_provider_type().value
-
-        for provider_name in providers:
-            try:
-                # Test connection to each provider
-                test_provider = LLMProviderFactory.create_provider(provider_name)
-                health = test_provider.health_check()
-                connected = health.get("connected", False)
-                endpoint = health.get("endpoint", "Unknown")
-
-                status_icon = "🟢" if connected else "🔴"
-                current_marker = (
-                    " [bold yellow](current)[/bold yellow]"
-                    if provider_name == current_provider
-                    else ""
-                )
-
-                self.console.print(
-                    f"{status_icon} [bold]{provider_name.upper()}[/bold]{current_marker}"
-                )
-                self.console.print(f"   Endpoint: {endpoint}")
-                self.console.print(f"   Status: {'Connected' if connected else 'Not available'}")
-
-                if connected:
-                    models = health.get("available_models", [])
-                    model_count = len(models)
-                    self.console.print(f"   Models: {model_count} available")
-
-                self.console.print()
-
-            except Exception as e:
-                status_icon = "❌"
-                current_marker = (
-                    " [bold yellow](current)[/bold yellow]"
-                    if provider_name == current_provider
-                    else ""
-                )
-                self.console.print(
-                    f"{status_icon} [bold]{provider_name.upper()}[/bold]{current_marker}"
-                )
-                self.console.print(f"   Status: Error - {str(e)}")
-                self.console.print()
-
-        self.console.print("[dim]💡 Use [bold]/switch <provider>[/bold] to change provider[/dim]")
-
-    def _switch_provider(self, provider_name: str):
-        """Switch to a different provider"""
-        provider_name = provider_name.lower()
-
-        if provider_name not in ["ollama", "lm_studio"]:
-            self.console.print(f"[red]Unknown provider: {provider_name}[/red]")
-            self.console.print("[yellow]Available providers: ollama, lm_studio[/yellow]")
-            return
-
-        try:
-            # Create new provider instance
-            new_provider = LLMProviderFactory.create_provider(provider_name)
-
-            # Test connection
-            health = new_provider.health_check()
-            if not health.get("connected", False):
-                self.console.print(
-                    f"[red]Cannot switch to {provider_name.upper()}: Not connected[/red]"
-                )
-                self.console.print(
-                    f"[yellow]Endpoint: {health.get('endpoint', 'Unknown')}[/yellow]"
-                )
-                self.console.print("[dim]Make sure the server is running and accessible[/dim]")
-                return
-
-            # Switch provider
-            old_provider = self.llm_provider.get_provider_type().value
-            self.llm_provider = new_provider
-            self.task_processor.llm_provider = new_provider  # Update task processor too
-            self.agent_processor.llm_provider = new_provider  # Update agent processor too
-            self.review_processor.llm_provider = new_provider  # Update review processor too
-            self.tool_manager.llm_provider = new_provider  # Update tool manager too
-
-            # Get model info
-            current_model = new_provider.get_current_model() or "None"
-            available_models = health.get("available_models", [])
-
-            self.console.print(
-                f"[green]✅ Switched from {old_provider.upper()} to {provider_name.upper()}[/green]"
-            )
-            self.console.print(f"[blue]Endpoint: {health.get('endpoint')}[/blue]")
-            self.console.print(f"[yellow]Current Model: {current_model}[/yellow]")
-            self.console.print(f"[dim]Available Models: {len(available_models)}[/dim]")
-
-            if len(available_models) > 1:
-                self.console.print(
-                    "\n[dim]💡 Use [bold]/models[/bold] to select a different model[/dim]"
-                )
-
-        except Exception as e:
-            self.console.print(f"[red]Failed to switch to {provider_name}: {e}[/red]")
-
-    def _auto_detect_provider(self):
-        """Auto-detect the best available provider"""
-        self.console.print("[blue]🔍 Auto-detecting providers...[/blue]")
-
-        try:
-            # Use factory's auto-detection
-            detected_provider = LLMProviderFactory.create_auto_detect()
-            health = detected_provider.health_check()
-
-            if health.get("connected", False):
-                provider_type = detected_provider.get_provider_type().value
-                old_provider = self.llm_provider.get_provider_type().value
-
-                if provider_type != old_provider:
-                    self.llm_provider = detected_provider
-                    self.task_processor.llm_provider = detected_provider
-                    self.agent_processor.llm_provider = detected_provider
-                    self.review_processor.llm_provider = detected_provider
-                    self.tool_manager.llm_provider = detected_provider
-
-                    current_model = detected_provider.get_current_model() or "None"
-                    available_models = health.get("available_models", [])
-
-                    self.console.print(
-                        f"[green]✅ Auto-detected and switched to {provider_type.upper()}[/green]"
-                    )
-                    self.console.print(f"[blue]Endpoint: {health.get('endpoint')}[/blue]")
-                    self.console.print(f"[yellow]Current Model: {current_model}[/yellow]")
-                    self.console.print(f"[dim]Available Models: {len(available_models)}[/dim]")
-                else:
-                    self.console.print(
-                        f"[yellow]Already using the best available provider: {provider_type.upper()}[/yellow]"
-                    )
-            else:
-                self.console.print("[red]❌ No providers available or connected[/red]")
-                self.console.print("[dim]Make sure Ollama or LM Studio is running[/dim]")
-
-        except Exception as e:
-            self.console.print(f"[red]Auto-detection failed: {e}[/red]")
-
     def _set_server_endpoint(self, server_url: str):
-        """Set custom server endpoint for current provider"""
+        """Set custom Ollama server endpoint"""
         try:
-            provider_type = self.llm_provider.get_provider_type().value
-
-            # Create new provider with custom endpoint
-            new_provider = LLMProviderFactory.create_provider(provider_type, base_url=server_url)
+            # Create new Ollama provider with custom endpoint
+            new_provider = LLMProviderFactory.create_provider("ollama", base_url=server_url)
 
             # Test connection
             health = new_provider.health_check()

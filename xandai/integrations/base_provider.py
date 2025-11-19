@@ -1,8 +1,8 @@
 ﻿"""
 Base LLM Provider Abstraction
 
-Unified interface for different LLM providers (Ollama, LM Studio, etc.)
-Engineered for extensibility and backward compatibility.
+Unified interface for Ollama provider.
+Engineered for offline operation.
 """
 
 from abc import ABC, abstractmethod
@@ -15,7 +15,6 @@ class ProviderType(Enum):
     """Supported LLM provider types"""
 
     OLLAMA = "ollama"
-    LM_STUDIO = "lm_studio"
 
 
 @dataclass
